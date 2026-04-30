@@ -31,7 +31,7 @@ flowchart TD
         F["FastAPI Service"]
         G["Admin Upload UI"]
         H["Review UI"]
-        I["Recommendation API"]
+        I["Rule-based Recommendation API"]
         J["Chatbot API"]
     end
 
@@ -48,8 +48,8 @@ flowchart TD
         Q["Amazon S3 Raw"]
         R["Amazon S3 Parsed"]
         S["PostgreSQL"]
-        T["Published Rules"]
-        U["Draft Rules"]
+        T["Published Rules<br/>(approved rules)"]
+        U["Draft Rules<br/>(AI extracted drafts)"]
         V["Audit Logs / User Inputs"]
         W["pgvector"]
     end
@@ -100,6 +100,7 @@ flowchart TD
     S --> T
     S --> U
     S --> V
+    F --> W
 
     F --> X
     O --> X
@@ -110,6 +111,16 @@ flowchart TD
     T --> Y
     Y --> Z
 ```
+
+## Diagram Notes
+
+- `Amazon S3 Raw`: 업로드된 원본 PDF / HWP / HTML을 보관하는 계층
+- `Amazon S3 Parsed`: 파싱 후 정제된 텍스트와 중간 산출물을 저장하는 계층
+- `Draft Rules`: LLM이 추출한 초안 규칙. 아직 추천에 직접 사용하지 않음
+- `Published Rules`: 관리자 검토 후 승인된 규칙. 상태 선택형 추천에서 직접 조회
+- `Rule-based Recommendation API`: 사용자가 클릭/선택한 상태값으로 결과를 계산하는 1차 MVP 기능
+- `Chatbot API`: FastAPI가 pgvector와 Published Rules를 함께 조회한 뒤 LLM으로 답변을 생성하는 2차 기능
+- `pgvector`: 챗봇이 관련 문서 chunk를 검색하기 위한 벡터 인덱스
 
 ## Component Responsibilities
 
@@ -128,6 +139,7 @@ flowchart TD
 - 문서 파싱 및 후처리 오케스트레이션
 - 추천 API 및 챗봇 API 제공
 - Draft / Published Rules 반영 처리
+- 챗봇 요청 시 PostgreSQL과 pgvector를 함께 조회하는 오케스트레이터 역할 수행
 
 ### 3. Amazon S3
 
@@ -187,9 +199,10 @@ flowchart TD
 ### C. 챗봇 RAG
 
 1. 사용자가 질문을 입력한다.
-2. 챗봇 API가 pgvector에서 관련 문서 청크를 검색한다.
-3. 관련 청크와 Published Rules를 함께 LLM에 전달한다.
-4. 답변과 근거를 함께 반환한다.
+2. FastAPI의 Chatbot API가 pgvector에서 관련 문서 청크를 검색한다.
+3. 동시에 PostgreSQL의 Published Rules를 조회해 운영 규칙을 함께 가져온다.
+4. 관련 청크와 Published Rules를 LLM에 전달한다.
+5. 답변과 근거를 함께 반환한다.
 
 ### D. 최종 데모 배포
 
@@ -202,6 +215,7 @@ flowchart TD
 - 업로드 문서 원본과 파싱 결과를 분리 저장한다.
 - 운영 데이터는 Published Rules만 사용한다.
 - AI 추출 결과는 반드시 Draft 상태를 거친다.
-- 챗봇 RAG와 추천 엔진은 같은 문서를 참고하되, 운영 규칙 저장소는 분리한다.
+- 상태 선택형 추천과 챗봇형 추천은 API를 분리하되, 같은 운영 규칙을 참조한다.
+- 챗봇은 FastAPI를 통해 pgvector와 PostgreSQL을 함께 조회한다.
 - Docker Compose로 로컬과 데모 서버 실행 방식을 통일한다.
 - EC2는 상시 운영이 아니라 포트폴리오 데모 목적의 선택적 런타임으로 사용한다.
