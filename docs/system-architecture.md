@@ -1,52 +1,112 @@
 # System Architecture
 
+기능요구사항과 운영 의사결정을 반영한 MVP 기준 시스템 아키텍처입니다. 핵심은 `문서 업로드 -> 파싱 -> 변경 감지 -> 초안 생성 -> 관리자 검토 알림 -> 승인 반영` 워크플로우와, 승인된 운영 데이터만 참조하는 추천 엔진입니다.
+
 ```mermaid
 flowchart TD
-    A["관리자 문서 업로드<br/>PDF / HWP / HTML"] --> B["Admin Upload UI"]
-    B --> C["원본 저장소<br/>(Amazon S3 Raw)"]
+    subgraph Admin["Admin Operation Domain"]
+        A["Admin Auth"]
+        B["Document Upload UI"]
+        C["Review / Approval UI"]
+        D["Document Guide CMS"]
+        E["Direct Rule Editor"]
+        A --> B
+        A --> C
+        A --> D
+        A --> E
+    end
 
-    C --> D["문서 파서<br/>(PDF / HWP / OCR)"]
-    D --> E["파싱 결과 저장<br/>(S3 Parsed)"]
+    subgraph Ingestion["Document Update Pipeline"]
+        F["Upload API"]
+        G["Amazon S3 Raw"]
+        H["Parser / OCR"]
+        I["Normalized Parsed Data"]
+        J["Change Detection Agent"]
+        K["Draft Proposal Builder"]
+        L["Review Queue"]
+        M["Notification Service"]
+        N["Draft Archive"]
+    end
 
-    E --> F["문서 분류기"]
-    F --> G["청크 생성"]
-    G --> H["임베딩 생성"]
-    H --> I["Vector Store<br/>(pgvector)"]
+    subgraph Published["Published Operational Data"]
+        O["Published Fund Rules"]
+        P["Published Document Requirement Rules"]
+        Q["Published Document Guide Content"]
+        R["Application Link Metadata<br/>(Deep Link 포함)"]
+        S["Approval / Audit Log"]
+    end
 
-    E --> J["LLM 추출기"]
-    J --> K["Draft Rules<br/>(PostgreSQL)"]
+    subgraph Recommend["Recommendation Domain"]
+        T["End User Web"]
+        U["Recommendation API / Rule Evaluator"]
+        V["Result Composer"]
+        W["추천 결과<br/>적합 / 근사 부적합 / 부적합"]
+        X["필요 서류 / 발급 방법 / 신청 링크"]
+    end
 
-    K --> L["검토 UI (Admin)"]
-    L -->|승인| M["Published Rules<br/>(PostgreSQL)"]
-    L -->|수정 후 승인| M
-    L -->|반려| N["Draft 보관 / 재검토"]
+    B --> F
+    F --> G
+    G --> H
+    H --> I
+    I --> J
+    J --> K
+    K --> L
+    J -->|변경 없음| S
+    L --> M
+    M --> C
+    C -->|승인| O
+    C -->|승인| P
+    C -->|승인| Q
+    C -->|승인| R
+    C -->|승인 또는 반려 기록| S
+    C -->|반려 또는 보류| N
+    D -->|직접 수정 또는 초안 생성| L
+    E -->|직접 수정 또는 초안 생성| L
 
-    U["사용자 상태 선택<br/>업종 / 매출 / 업력 / 체납 여부"] --> O["상태 선택형 추천 API"]
-    M --> O
-
-    V["챗봇 질문"] --> P["챗봇 API"]
-    P --> I
-    P --> M
-    P --> W["LLM 응답 생성"]
-
-    C --> Q["선택적 분석 적재"]
-    E --> Q
-    M --> Q
-    Q --> R["리포팅 / 포트폴리오 데모 분석"]
-
-    S["EC2 + Docker Compose<br/>(최종 데모 배포)"] --> B
-    S --> O
-    S --> P
+    T --> U
+    O --> U
+    P --> U
+    Q --> U
+    R --> U
+    U --> V
+    V --> W
+    V --> X
 ```
+
+## Core Principles
+
+- 추천 서비스는 승인 후 반영된 운영 데이터만 참조합니다.
+- 운영 데이터는 `정책자금 규칙`, `필요 서류 규칙`, `서류 발급 가이드`, `신청 링크` 도메인으로 분리합니다.
+- 업로드 문서에서 추출된 초안은 직접 운영 반영되지 않고 반드시 검토 큐와 승인 단계를 거칩니다.
+- 관리자 기능은 인증된 관리자만 접근할 수 있어야 합니다.
+- `신용점수`, `기대출` 같은 민감 입력값은 MVP에서 추천 평가용으로만 사용하고 raw 값 영구 저장은 기본 요구사항에서 제외합니다.
+- 챗봇과 RAG 검색은 `MVP 이후` 확장 영역으로 분리합니다.
+
+## Main Flows
+
+### 1. 규칙 업데이트 및 승인
+
+1. 관리자가 공고문 또는 기관 안내문을 업로드합니다.
+2. 시스템이 문서를 파싱하고 정규화된 텍스트를 생성합니다.
+3. 변경 감지 에이전트가 기존 운영 데이터와 비교해 차이 여부를 판단합니다.
+4. 변경이 있으면 자금 규칙, 필요 서류 규칙, 서류 가이드, 신청 링크에 대한 초안 변경안을 만듭니다.
+5. 시스템이 관리자에게 검토 알림을 보냅니다.
+6. 관리자가 승인, 반려, 수정 후 승인을 수행합니다.
+7. 승인된 변경만 운영 데이터로 반영됩니다.
+
+### 2. 사용자 추천
+
+1. 사용자가 선택/검색 중심 UI로 기업 정보를 입력합니다.
+2. 추천 API가 승인된 운영 데이터만 조회합니다.
+3. Rule Evaluator가 자금별 `적합`, `근사 부적합`, `부적합` 상태를 계산합니다.
+4. Result Composer가 우선순위, 추천 근거, 필요 서류, 발급 가이드, 신청 딥링크를 함께 조합합니다.
+5. 사용자에게 추천 결과와 후속 준비 정보를 반환합니다.
 
 ## Notes
 
-- 문서는 크롤링이 아니라 관리자가 직접 업로드하는 MVP 기준입니다.
-- Amazon S3는 원본 문서와 파싱 결과를 보관하는 저장소입니다.
-- PostgreSQL은 Draft / Published Rules와 추천 서비스 운영 데이터의 기준 저장소입니다.
-- `Draft Rules`는 AI가 추출한 초안이고, `Published Rules`는 검토 후 실제 추천에 사용되는 운영 규칙입니다.
-- pgvector는 챗봇 RAG와 문서 근거 검색을 위한 벡터 저장소입니다.
-- 상태 선택형 추천은 PostgreSQL의 `Published Rules`를 직접 조회합니다.
-- 챗봇은 FastAPI를 통해 pgvector와 PostgreSQL을 함께 조회한 뒤 LLM으로 답변을 생성합니다.
-- EC2는 최종 데모 배포용 런타임으로만 사용하며, 평소에는 인스턴스를 꺼둘 수 있습니다.
-- 분석 계층은 선택 사항이며, 포트폴리오 MVP에서는 필수는 아닙니다.
+- `Published Fund Rules`는 자금별 자격 조건, 우선순위 계산 기준, 핵심 요약 정보를 포함하는 운영 규칙 저장소입니다.
+- `Published Document Requirement Rules`는 자금 공통 서류와 조건부 서류 매핑을 담당합니다.
+- `Published Document Guide Content`는 각 서류의 발급 방법, 유의사항, 실무 정보를 관리합니다.
+- `Application Link Metadata`는 기관별 자금 신청 딥링크와 신청 채널 정보를 관리합니다.
+- `Approval / Audit Log`는 MVP에서 최소 `updated_at`, `updated_by`, `approved_at`, `approved_by` 수준의 기록을 남기는 것을 전제로 합니다.
+- `Notification Service`는 이메일, 슬랙, 인앱 알림 중 하나 이상의 방식으로 구현할 수 있습니다.

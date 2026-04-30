@@ -2,15 +2,29 @@
 
 ## Recommended Stack
 
-- Frontend / BFF: Next.js
-- Backend Processing: FastAPI
+- Frontend / Admin Console: Next.js
+- Backend API: FastAPI
+- Background Processing: Worker process for parsing, OCR, AI extraction, change detection, notification dispatch
 - Operational Database: PostgreSQL
-- Vector Search: pgvector
 - Object Storage: Amazon S3
-- LLM / Embeddings: OpenAI API
+- LLM Processing: OpenAI API
+- Admin Authentication: session-based admin auth
+- Notification Channel: Email, Slack, or webhook
 - Runtime: Docker Compose
 - Final Demo Deployment: Amazon EC2
-- Analytics: Optional only
+- Post-MVP Optional: pgvector for chatbot RAG
+
+## Core Data Domains
+
+- `source_documents`: 업로드 원본 문서 메타데이터
+- `parsed_documents`: 파싱 또는 정규화 결과 메타데이터
+- `draft_changes`: AI가 제안한 규칙, 서류, 링크 변경 초안
+- `fund_rules`: 승인된 정책자금 규칙
+- `document_requirement_rules`: 자금과 사용자 조건 기반 필요 서류 매핑
+- `document_guides`: 서류 발급 방법 콘텐츠
+- `application_links`: 자금별 외부 신청 딥링크와 신청 채널 정보
+- `approval_logs`: 승인, 반려, 수정 이력
+- `recommendation_request_logs`: 필요 시 구간화된 사용자 입력 로그만 저장하는 선택적 도메인
 
 ## Architecture Diagram
 
@@ -28,39 +42,34 @@ flowchart TD
 
     subgraph App["Application Layer"]
         E["Next.js Web App"]
-        F["FastAPI Service"]
-        G["Admin Upload UI"]
-        H["Review UI"]
-        I["Rule-based Recommendation API"]
-        J["Chatbot API"]
+        F["Admin Auth / Session"]
+        G["FastAPI API"]
+        H["Recommendation Service"]
+        I["Review Workflow Service"]
     end
 
-    subgraph Pipeline["Document Pipeline"]
-        K["Upload Handler"]
-        L["Parser / OCR"]
-        M["Parsed Output Writer"]
-        N["Chunk Builder"]
-        O["Embedding Job"]
-        P["Rule Extraction Job"]
+    subgraph Jobs["Background Jobs"]
+        J["Upload Handler"]
+        K["Parser / OCR Worker"]
+        L["Change Detection Worker"]
+        M["Draft Builder"]
+        N["Notification Dispatcher"]
     end
 
     subgraph Storage["Storage Layer"]
-        Q["Amazon S3 Raw"]
-        R["Amazon S3 Parsed"]
-        S["PostgreSQL"]
-        T["Published Rules<br/>(approved rules)"]
-        U["Draft Rules<br/>(AI extracted drafts)"]
-        V["Audit Logs / User Inputs"]
-        W["pgvector"]
+        O["Amazon S3 Raw"]
+        P["Amazon S3 Parsed"]
+        Q["PostgreSQL<br/>fund_rules / document_requirement_rules / document_guides / application_links / draft_changes / approval_logs"]
     end
 
     subgraph External["External Services"]
-        X["OpenAI API"]
+        R["OpenAI API"]
+        S["Email / Slack / Webhook"]
     end
 
-    subgraph Analytics["Optional Analytics Layer"]
-        Y["Parquet / DW Export"]
-        Z["Portfolio Reporting"]
+    subgraph Future["Post-MVP Extension"]
+        T["Chatbot API"]
+        U["Vector Store (pgvector)"]
     end
 
     A --> E
@@ -68,154 +77,119 @@ flowchart TD
 
     C --> D
     D --> E
-    D --> F
-    D --> S
+    D --> G
+    D --> Q
 
+    E --> F
     E --> G
-    E --> H
-    E --> I
-    E --> J
+    G --> H
+    G --> I
 
-    G --> F
-    H --> F
-    I --> F
-    J --> F
-
-    F --> K
-    K --> Q
-    Q --> L
+    I --> J
+    J --> O
+    O --> K
+    K --> P
+    P --> L
     L --> M
+    M --> Q
+    I --> Q
+    I --> N
+    N --> S
+
+    H --> Q
+    L --> R
     M --> R
 
-    R --> N
-    N --> O
-    O --> W
-
-    R --> P
     P --> U
-    H --> U
-    H --> T
-
-    F --> S
-    S --> T
-    S --> U
-    S --> V
-    F --> W
-
-    F --> X
-    O --> X
-    P --> X
-
-    Q --> Y
-    R --> Y
-    T --> Y
-    Y --> Z
+    Q --> T
+    U --> T
 ```
-
-## Diagram Notes
-
-- `Amazon S3 Raw`: 업로드된 원본 PDF / HWP / HTML을 보관하는 계층
-- `Amazon S3 Parsed`: 파싱 후 정제된 텍스트와 중간 산출물을 저장하는 계층
-- `Draft Rules`: LLM이 추출한 초안 규칙. 아직 추천에 직접 사용하지 않음
-- `Published Rules`: 관리자 검토 후 승인된 규칙. 상태 선택형 추천에서 직접 조회
-- `Rule-based Recommendation API`: 사용자가 클릭/선택한 상태값으로 결과를 계산하는 1차 MVP 기능
-- `Chatbot API`: FastAPI가 pgvector와 Published Rules를 함께 조회한 뒤 LLM으로 답변을 생성하는 2차 기능
-- `pgvector`: 챗봇이 관련 문서 chunk를 검색하기 위한 벡터 인덱스
 
 ## Component Responsibilities
 
 ### 1. Next.js Web App
 
-- 정책자금 소개 페이지 제공
+- `S1` ~ `S5` 사용자 화면 제공
 - 관리자 문서 업로드 화면 제공
-- 추천 결과 화면 제공
-- 챗봇 UI 제공
-- 검토 및 승인 화면 제공
+- 관리자 검토 및 승인 화면 제공
+- 서류 발급 가이드 CMS 화면 제공
 
-### 2. FastAPI Service
+### 2. Admin Auth / Session
 
-- 문서 업로드 처리
-- S3 파일 저장 연동
-- 문서 파싱 및 후처리 오케스트레이션
-- 추천 API 및 챗봇 API 제공
-- Draft / Published Rules 반영 처리
-- 챗봇 요청 시 PostgreSQL과 pgvector를 함께 조회하는 오케스트레이터 역할 수행
+- 로그인한 관리자만 운영 기능에 접근하도록 보호
+- 관리자 세션 검증 및 권한 확인
 
-### 3. Amazon S3
+### 3. FastAPI API
 
-- 원본 PDF / HWP / HTML 저장
-- 파싱된 텍스트 결과 저장
-- chunk 생성 전 중간 산출물 저장
-- 재파싱 / 재임베딩 / 재검토를 위한 장기 보관 계층
+- 사용자 추천 요청 수신
+- 관리자 업로드 및 검토 요청 처리
+- 추천 서비스와 워크플로우 서비스 오케스트레이션
 
-### 4. PostgreSQL
+### 4. Recommendation Service
 
-- 문서 메타데이터 저장
-- 자격요건 초안 저장
-- 승인된 정책 규칙 저장
-- 사용자 입력, 감사 로그, 검토 이력 저장
+- 승인된 운영 데이터만 조회
+- 자금별 `적합`, `근사 부적합`, `부적합` 판정 계산
+- 우선순위, 추천 근거, 필요 서류, 딥링크 조합
 
-### 5. pgvector
+### 5. Review Workflow Service
 
-- 문서 청크 임베딩 저장
-- 챗봇 RAG 검색
-- 추천 결과에 필요한 근거 탐색 보조
+- 문서 업로드 이후 파이프라인 시작
+- 변경 초안 생성 및 검토 큐 관리
+- 승인, 반려, 수정 후 승인 처리
 
-### 6. OpenAI API
+### 6. Background Jobs
 
-- 임베딩 생성
-- 문서 기반 자격요건 구조화 추출
-- 챗봇 응답 생성
+- 문서 저장, 파싱, OCR 수행
+- LLM 기반 구조화 추출과 변경 감지 수행
+- 검토 알림 발송
 
-### 7. Docker Compose
+### 7. PostgreSQL
 
-- Next.js / FastAPI / PostgreSQL 실행 환경 통합
-- 로컬 개발과 데모 서버 실행 환경 일치
-- 면접 시 `docker compose up` 기반 재현성 제공
+- 운영 규칙과 서류 도메인의 기준 저장소
+- 초안 변경안과 승인 이력 저장
+- 필요 시 구간화된 추천 요청 로그 저장
 
-### 8. Amazon EC2
+### 8. Amazon S3
 
-- 최종 데모용 배포 서버
-- Docker Compose 기반으로 앱 실행
-- 필요할 때만 켜고, 평소에는 중지 가능한 비용 절약형 운영
+- 원본 문서와 파싱 결과 저장
+- 재처리와 재검토를 위한 장기 보관 계층
+
+### 9. OpenAI API
+
+- 문서 기반 구조화 추출
+- 기존 운영 규칙과의 변경 차이 보조 판단
+- 챗봇 도입 시 응답 생성에 재사용 가능
 
 ## Main Flows
 
-### A. 문서 업로드 및 구조화
+### A. 문서 업로드와 승인 반영
 
-1. 관리자가 PDF / HWP / HTML 문서를 업로드한다.
-2. 업로드 핸들러가 원본 문서를 S3 Raw에 저장한다.
-3. 파서가 문서를 텍스트로 변환하고 파싱 결과를 S3 Parsed에 저장한다.
-4. LLM이 파싱 결과에서 자격요건 후보를 추출해 Draft Rules로 저장한다.
-5. 관리자가 검토 후 Published Rules로 승인한다.
+1. 관리자가 문서를 업로드한다.
+2. Upload Handler가 원본 문서를 S3 Raw에 저장한다.
+3. Parser / OCR Worker가 문서를 파싱해 S3 Parsed에 저장한다.
+4. Change Detection Worker가 기존 운영 데이터와 비교한다.
+5. Draft Builder가 변경 초안을 만들어 PostgreSQL에 기록한다.
+6. Notification Dispatcher가 관리자에게 검토 요청을 보낸다.
+7. 관리자가 승인하면 운영 데이터에 반영한다.
 
 ### B. 사용자 자금 추천
 
-1. 사용자가 기업 상태를 입력한다.
-2. FastAPI가 PostgreSQL의 Published Rules를 조회한다.
-3. 추천 엔진이 조건 매칭과 업종 기반 추론을 수행한다.
-4. 추천 자금, 보완 항목, 필요 서류를 반환한다.
+1. 사용자가 기업 정보를 선택 또는 검색으로 입력한다.
+2. FastAPI가 Recommendation Service에 구조화된 입력값을 전달한다.
+3. Recommendation Service가 승인된 `fund_rules`, `document_requirement_rules`, `document_guides`, `application_links`를 조회한다.
+4. 자금별 판정 상태, 우선순위, 추천 근거, 필요 서류, 신청 링크를 계산해 반환한다.
 
-### C. 챗봇 RAG
+### C. 챗봇 확장
 
-1. 사용자가 질문을 입력한다.
-2. FastAPI의 Chatbot API가 pgvector에서 관련 문서 청크를 검색한다.
-3. 동시에 PostgreSQL의 Published Rules를 조회해 운영 규칙을 함께 가져온다.
-4. 관련 청크와 Published Rules를 LLM에 전달한다.
-5. 답변과 근거를 함께 반환한다.
+1. `MVP 이후` 챗봇이 필요해지면 pgvector와 Chatbot API를 추가한다.
+2. 챗봇은 승인된 운영 데이터와 문서 임베딩을 함께 조회한다.
+3. 사용자에게 설명형 답변과 근거를 제공한다.
 
-### D. 최종 데모 배포
+## Design Decisions
 
-1. 애플리케이션을 Docker Compose로 패키징한다.
-2. EC2 인스턴스에서 컨테이너를 실행한다.
-3. 데모가 끝나면 EC2를 중지하고, 문서와 데이터는 S3 / PostgreSQL에 유지한다.
-
-## Design Principles
-
-- 업로드 문서 원본과 파싱 결과를 분리 저장한다.
-- 운영 데이터는 Published Rules만 사용한다.
-- AI 추출 결과는 반드시 Draft 상태를 거친다.
-- 상태 선택형 추천과 챗봇형 추천은 API를 분리하되, 같은 운영 규칙을 참조한다.
-- 챗봇은 FastAPI를 통해 pgvector와 PostgreSQL을 함께 조회한다.
-- Docker Compose로 로컬과 데모 서버 실행 방식을 통일한다.
-- EC2는 상시 운영이 아니라 포트폴리오 데모 목적의 선택적 런타임으로 사용한다.
+- 운영 소스 오브 트루스는 승인된 운영 데이터다.
+- 업로드 문서 기반 초안과 직접 관리자 수정 모두 검토 큐를 거친 뒤 반영한다.
+- `정책자금 규칙`, `필요 서류 규칙`, `서류 가이드`, `신청 링크`는 분리된 도메인으로 관리한다.
+- `신용점수`, `기대출` raw 값은 MVP 기본 저장 대상에서 제외한다.
+- 장시간 실행되는 파싱, AI 추출, 변경 감지는 동기 API가 아니라 백그라운드 작업으로 처리하는 편이 안정적이다.
+- 챗봇과 RAG 저장소는 MVP의 필수 구성요소가 아니라 후속 확장으로 둔다.
