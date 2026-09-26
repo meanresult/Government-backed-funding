@@ -1,0 +1,16 @@
+[project]
+name = "government-backed-funding"
+version = "0.1.0"
+description = "Policy funding collection and conversational guidance with Snowflake."
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "boto3>=1.40,<2",
+    "beautifulsoup4>=4.13,<5",
+    "playwright>=1.55,<2",
+    "pyyaml>=6.0,<7",
+]
+
+[tool.uv]
+required-version = "==0.12.15"
+package = false

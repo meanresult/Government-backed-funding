@@ -1,0 +1,4 @@
+name: government-backed-funding
+
+# 각 애플리케이션과 작업자가 구현될 때 서비스를 이곳에 등록합니다.
+services: {}
