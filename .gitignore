@@ -28,6 +28,7 @@ htmlcov/
 .venv/
 /.tools/
 .local/
+/.codex/config.toml
 venv/
 dist/
 build/
