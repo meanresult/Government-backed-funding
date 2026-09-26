@@ -1,5 +1,7 @@
 # 09. 추천 API 실제명세
 
+> 적용 상태 (`2026-09-17`): `/api/recommendations` 우선 구현은 보류한다. 먼저 Snowflake 저장·시멘틱 레이어와 기업 상태를 묻는 대화형 안내를 구현한다. 아래 REST 명세는 후속 참고이며 현재 범위는 [15_대화형_정책자금_안내_전환계획.md](15_대화형_정책자금_안내_전환계획.md)를 따른다.
+
 정책자금 추천 서비스에서 프론트엔드가 백엔드에 어떤 값을 보내고, 백엔드는 어떤 순서로 추천 결과와 맞춤 제출서류를 계산해 반환할지 정의한 실제 API 명세 문서입니다.
 
 이 문서는 새로운 추천 정책을 만드는 문서가 아니라, [06_추천규칙_데이터모델.md](/Users/jeehun/Documents/GitHub/Government-backed funding/docs/06_추천규칙_데이터모델.md), [07_서류안내_규칙정의.md](/Users/jeehun/Documents/GitHub/Government-backed funding/docs/07_서류안내_규칙정의.md), [08_추천_API_응답정의.md](/Users/jeehun/Documents/GitHub/Government-backed funding/docs/08_추천_API_응답정의.md)를 실제 API 호출 규격으로 연결하는 개발 기준 문서입니다.
