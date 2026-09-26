@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "policy_fund/v1.json",
+  "title": "Policy Fund Collection Record",
+  "description": "AI 수집 파이프라인이 생성하는 정책자금 데이터 계약의 v1 골격입니다.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "source",
+    "payload",
+    "extraction"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "v1"
+    },
+    "source": {
+      "type": "object",
+      "required": [
+        "source_id",
+        "url",
+        "collected_at"
+      ],
+      "properties": {
+        "source_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "collected_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "checksum": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "payload": {
+      "type": "object",
+      "description": "정책자금 도메인 필드는 수집 대상 확정 후 이 영역에 구체화합니다."
+    },
+    "extraction": {
+      "type": "object",
+      "required": [
+        "model",
+        "prompt_version",
+        "extracted_at"
+      ],
+      "properties": {
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "prompt_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "extracted_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

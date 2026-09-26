@@ -1,0 +1,19 @@
+source_id: semas_ols_notice
+institution_name: 소상공인시장진흥공단
+start_url: https://ols.semas.or.kr/ols/man/SMAN051M/page.do
+allowed_hosts:
+  - ols.semas.or.kr
+adapter: semas_ols_notice
+bbs_type_code: "01"
+
+storage:
+  s3_bucket: sme-policy-funding-raw-apne2-01
+  s3_region: ap-northeast-2
+  s3_prefix: raw/semas_ols_notice
+  local_root: .local/raw
+
+limits:
+  max_pages: null
+  max_notices: null
+  navigation_timeout_ms: 30000
+  request_delay_ms: 200

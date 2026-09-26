@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://government-backed-funding.local/schemas/raw/metadata_v1.json",
+  "title": "RAW announcement metadata v1",
+  "type": "object",
+  "required": [
+    "metadata_schema_version",
+    "source_id",
+    "announcement_id",
+    "source_record_id",
+    "run_id",
+    "snapshot_id",
+    "title",
+    "collected_at",
+    "content_hash",
+    "capture_status",
+    "artifacts"
+  ],
+  "properties": {
+    "metadata_schema_version": {"const": "1"},
+    "source_id": {"type": "string", "minLength": 1},
+    "institution_name": {"type": "string"},
+    "announcement_id": {"type": "string", "minLength": 1},
+    "source_record_id": {"type": "string", "minLength": 1},
+    "identity_method": {"type": "string"},
+    "bbs_type_code": {"type": ["string", "null"]},
+    "loan_type": {"type": ["string", "null"]},
+    "category": {"type": ["string", "null"]},
+    "title": {"type": ["string", "null"]},
+    "registered_date": {"type": ["string", "null"]},
+    "notice_type": {"type": ["string", "null"]},
+    "retention_class": {"enum": ["long", "short", "review", null]},
+    "requested_url": {"type": "string", "format": "uri"},
+    "final_url": {"type": "string", "format": "uri"},
+    "run_id": {"type": "string", "minLength": 1},
+    "snapshot_id": {"type": "string", "minLength": 1},
+    "previous_snapshot_id": {"type": ["string", "null"]},
+    "collected_at": {"type": "string", "format": "date-time"},
+    "collector_version": {"type": "string", "minLength": 1},
+    "source_config_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "content_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "capture_status": {"enum": ["COMPLETE", "PARTIAL", "FAILED"]},
+    "errors": {"type": "array", "items": {"type": "object"}},
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["artifact_id", "role", "s3_key", "sha256", "size_bytes", "status"],
+        "properties": {
+          "artifact_id": {"type": "string"},
+          "role": {"type": "string"},
+          "source_url": {"type": ["string", "null"]},
+          "original_filename": {"type": ["string", "null"]},
+          "mime_type": {"type": ["string", "null"]},
+          "s3_key": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "size_bytes": {"type": "integer", "minimum": 0},
+          "status": {"enum": ["COMPLETE", "FAILED"]}
+        }
+      }
+    }
+  }
+}
